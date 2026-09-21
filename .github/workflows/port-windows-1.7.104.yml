@@ -1,0 +1,118 @@
+name: build-1.7.104-fomod
+
+# Builds CrosshairRefEventsFix for Skyrim AE 1.7.104 and packages it as a FOMOD
+# archive that Amethyst / MO2 / Vortex install in one click.
+#
+# The whole port is the CommonLibSSE-NG revision: the 1.7.104 Address Library
+# (versionlib-1-7-104-0.bin) is format 5, and only a CommonLibSSE-NG whose
+# include/REL/IDDB.h defines Format::SSEv5 can read it. The build asserts that
+# before compiling, so a green run cannot come from the wrong reader.
+
+on:
+  push:
+    branches: ["port/1.7.104"]
+    tags: ["port-*"]
+  pull_request:
+    branches: ["port/1.7.104"]
+  workflow_dispatch:
+
+env:
+  # alandtse/CommonLibVR `ng`, the revision with include/REL/IDDB.h and
+  # Format::SSEv5 (format-5 / 1.7.99+ Address Library reader).
+  COMMONLIB_COMMIT: abe9ca7b7318dbc04bccfcd59fc3fb670244c2d7
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Pin CommonLibSSE-NG to the format-5 revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd lib/CommonLibSSE-NG
+          git fetch --depth 1 origin "$COMMONLIB_COMMIT"
+          git checkout --detach "$COMMONLIB_COMMIT"
+          git log --oneline -1
+          test -f include/REL/IDDB.h || { echo "::error::IDDB.h missing - wrong revision"; exit 1; }
+          grep -q "SSEv5" include/REL/IDDB.h || { echo "::error::no SSEv5 in IDDB.h"; exit 1; }
+          echo "format-5 Address Library reader present in the pinned revision"
+
+      - uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+
+      - name: Cache xmake packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.xmake
+          key: xmake-pkgs-${{ runner.os }}-${{ hashFiles('xmake.lua') }}
+          restore-keys: xmake-pkgs-${{ runner.os }}-
+
+      - name: Build CrosshairRefEventsFix.dll
+        shell: pwsh
+        run: |
+          xmake f -p windows -a x64 -m release -y
+          xmake build CrosshairRefEventsFix
+          Get-ChildItem -Recurse -Filter CrosshairRefEventsFix.dll | Select-Object FullName, Length
+
+      - name: Package the FOMOD
+        shell: bash
+        run: |
+          set -euo pipefail
+          dll=$(find build -name CrosshairRefEventsFix.dll | head -1)
+          [ -n "$dll" ] || { echo "::error::CrosshairRefEventsFix.dll was not built"; exit 1; }
+          test -s "$dll" || { echo "::error::the built DLL is empty"; exit 1; }
+
+          # Assert the artifact carries the work, not just that a file exists.
+          strings -n 6 "$dll" | grep -q "CrosshairRefEventsFix" || { echo "::error::plugin name missing from the DLL"; exit 1; }
+          strings -n 6 "$dll" | grep -q "disablePlayerControls overloading the script engine" || { echo "::error::the fix log string is missing from the DLL"; exit 1; }
+
+          mkdir -p out/fomod out/SKSE/Plugins
+          cp "$dll" out/SKSE/Plugins/CrosshairRefEventsFix.dll
+          cp fomod/ModuleConfig.xml out/fomod/ModuleConfig.xml
+          cp README-PORT.txt out/CrosshairRefEventsFix.txt
+          cp LICENSE out/LICENSE-CrosshairRefEventsFix.txt
+
+          # FOMOD shape: fomod/ModuleConfig.xml plus the data at the archive root.
+          test -f out/fomod/ModuleConfig.xml
+          test -f out/SKSE/Plugins/CrosshairRefEventsFix.dll
+
+          (cd out && 7z a "../CrosshairRefEventsFix-1.7.104-fomod.zip" fomod SKSE CrosshairRefEventsFix.txt LICENSE-CrosshairRefEventsFix.txt)
+          ls -l CrosshairRefEventsFix-1.7.104-fomod.zip
+
+          # Assert the archive actually contains the FOMOD and the DLL.
+          7z l CrosshairRefEventsFix-1.7.104-fomod.zip | grep -q "fomod/ModuleConfig.xml"
+          7z l CrosshairRefEventsFix-1.7.104-fomod.zip | grep -q "SKSE/Plugins/CrosshairRefEventsFix.dll"
+
+      - name: Report hashes
+        shell: bash
+        run: |
+          sha256sum out/SKSE/Plugins/CrosshairRefEventsFix.dll | sed 's/^/  dll  /'
+          sha256sum *.zip | sed 's/^/  zip  /'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CrosshairRefEventsFix-1.7.104-fomod
+          path: "*.zip"
+
+      - name: Attach to a release when tagging
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "*.zip"
+          body: |
+            CrosshairRefEventsFix rebuilt for Skyrim AE 1.7.104, packaged as a
+            FOMOD (install with Amethyst: Mods -> Install mod from file...).
+
+            Fixes continual CrosshairRef events while DisablePlayerControls is
+            active. Built against the CommonLibSSE-NG revision that reads
+            Address Library format 5. Unofficial build of
+            github.com/yeahhowaboutnooo/CrosshairRefEventsFix (MIT).

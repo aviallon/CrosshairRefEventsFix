@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://qconsulting.ca/fo3/ModConfig5.0.xsd">
+    <moduleName>CrosshairRefEventsFix (Skyrim AE 1.7.104)</moduleName>
+
+    <!-- No options: the plugin has a single, version-independent behaviour.
+         requiredInstallFiles is enough for a FOMOD with nothing to choose. -->
+    <requiredInstallFiles>
+        <file source="SKSE/Plugins/CrosshairRefEventsFix.dll" destination="SKSE/Plugins/CrosshairRefEventsFix.dll" />
+        <file source="CrosshairRefEventsFix.txt" destination="CrosshairRefEventsFix.txt" />
+    </requiredInstallFiles>
+
+    <installSteps order="Explicit" />
+</config>

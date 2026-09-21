@@ -7,34 +7,37 @@ engine.
 
 supports SSE and SAE
 
-## Requirements
+## Port to Skyrim AE 1.7.104
 
-- [Visual Studio 2022](https://visualstudio.microsoft.com/) (_the free Community
-  edition is fine!_)
-- [CMake](https://cmake.org/download/) 3.25.1+ (_please install the Latest
-  Release_)
-- [`vcpkg`](https://github.com/microsoft/vcpkg)
-  - 1. Clone the repository using git OR [download it as a
-    .zip](https://github.com/microsoft/vcpkg/archive/refs/heads/master.zip)
-  - 2. Go into the `vcpkg` folder and double-click on `bootstrap-vcpkg.bat`
-  - 3. Edit your system or user Environment Variables and add a new one:
-    - Name: `VCPKG_ROOT`  
-      Value: `C:\path\to\wherever\your\vcpkg\folder\is`
-  - 4. Alternatively to modifiyng your system path:
-    open a VS CMD prompt and enter: `set VCPKG_ROOT=C:\path\to\vcpkg` followed by `devenv`
+This tree is an unofficial port of
+[yeahhowaboutnooo/CrosshairRefEventsFix](https://github.com/yeahhowaboutnooo/CrosshairRefEventsFix)
+(MIT) to Skyrim AE 1.7.104.
 
-Once you have Visual Studio 2022 installed, you can open this folder in
-basically any C++ editor, e.g. [VS Code](https://code.visualstudio.com/) or
-[CLion](https://www.jetbrains.com/clion/) or [Visual
-Studio](https://visualstudio.microsoft.com/)
-- > _for VS Code, if you are not automatically prompted to install the
-  [C++](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cpptools)
-and [CMake
-Tools](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cmake-tools)
-extensions, please install those and then close VS Code and then open this
-project as a folder in VS Code_
+The upstream DLL is linked against a CommonLibSSE-NG revision that cannot read
+the Address Library format used from 1.7.99 on
+(`Data/SKSE/Plugins/versionlib-1-7-104-0.bin` is format 5), so on 1.7.104 it
+resolves no addresses. The port is therefore the CommonLibSSE-NG bump, plus one
+change to how the patch site is found.
 
-You may need to click `OK` on a few windows, but the project should
-automatically run CMake!
+* Build system: `xmake` + CommonLibSSE-NG as a git submodule (branch `ng`),
+  pinned to the revision whose `include/REL/IDDB.h` defines `Format::SSEv5`.
+* The patch site is located by its reference to `PlayerControls::GetSingleton`
+  inside `PlayerCharacter::PickCrosshairReference` (Address Library id 40620),
+  not by a hard-coded per-runtime byte offset. If the shape is not found the
+  plugin logs an error and patches nothing.
+* CI (`.github/workflows/port-windows-1.7.104.yml`) builds the DLL and packages
+  a FOMOD archive (`fomod/ModuleConfig.xml` + `SKSE/Plugins/`) that Amethyst,
+  MO2 and Vortex install in one click.
 
+### Build locally (Windows)
 
+```
+git clone --recurse-submodules <this repo>
+xmake f -p windows -a x64 -m release -y
+xmake build CrosshairRefEventsFix
+```
+
+## Upstream requirements
+
+- Visual Studio 2022, CMake and vcpkg were needed by the original CMake build.
+  They are no longer used here; see the port section above.
