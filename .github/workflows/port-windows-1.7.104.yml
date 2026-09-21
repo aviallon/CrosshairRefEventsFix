@@ -89,8 +89,9 @@ jobs:
           ls -l CrosshairRefEventsFix-1.7.104-fomod.zip
 
           # Assert the archive actually contains the FOMOD and the DLL.
-          7z l CrosshairRefEventsFix-1.7.104-fomod.zip | grep -q "fomod/ModuleConfig.xml"
-          7z l CrosshairRefEventsFix-1.7.104-fomod.zip | grep -q "SKSE/Plugins/CrosshairRefEventsFix.dll"
+          # 7-Zip lists paths with backslashes on Windows, so normalise them.
+          7z l CrosshairRefEventsFix-1.7.104-fomod.zip | tr '\\' '/' | grep -q "fomod/ModuleConfig.xml" || { echo "::error::fomod/ModuleConfig.xml missing from the archive"; exit 1; }
+          7z l CrosshairRefEventsFix-1.7.104-fomod.zip | tr '\\' '/' | grep -q "SKSE/Plugins/CrosshairRefEventsFix.dll" || { echo "::error::the plugin DLL is missing from the archive"; exit 1; }
 
       - name: Report hashes
         shell: bash
