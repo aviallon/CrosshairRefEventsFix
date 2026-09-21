@@ -20,6 +20,9 @@ env:
   # alandtse/CommonLibVR `ng`, the revision with include/REL/IDDB.h and
   # Format::SSEv5 (format-5 / 1.7.99+ Address Library reader).
   COMMONLIB_COMMIT: abe9ca7b7318dbc04bccfcd59fc3fb670244c2d7
+  # `~/.xmake` is not resolved by actions/cache on Windows, so put xmake's
+  # global dir somewhere absolute and cache that exact path instead.
+  XMAKE_GLOBALDIR: ${{ github.workspace }}/.xmake-global
 
 permissions:
   contents: write
@@ -52,7 +55,7 @@ jobs:
       - name: Cache xmake packages
         uses: actions/cache@v4
         with:
-          path: ~/.xmake
+          path: ${{ github.workspace }}/.xmake-global
           key: xmake-pkgs-${{ runner.os }}-${{ hashFiles('xmake.lua') }}
           restore-keys: xmake-pkgs-${{ runner.os }}-
 
@@ -62,15 +65,15 @@ jobs:
           # The xmake-mirror sometimes answers 504 while fetching a prebuilt
           # package (directxtk); retry the configure step instead of failing.
           $ok = $false
-          for ($i = 1; $i -le 5; $i++) {
+          for ($i = 1; $i -le 8; $i++) {
             xmake f -p windows -a x64 -m release -y
             if ($LASTEXITCODE -eq 0) { $ok = $true; break }
             Write-Host "::warning::xmake configure attempt $i failed; retrying in 20s"
             Start-Sleep -Seconds 20
           }
-          if (-not $ok) { Write-Host "::error::xmake configure failed after 5 attempts"; exit 1 }
+          if (-not $ok) { Write-Host "::error::xmake configure failed after 8 attempts"; exit 1 }
 
-          xmake -y build CrosshairRefEventsFix
+          xmake build CrosshairRefEventsFix
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Get-ChildItem -Recurse -Filter CrosshairRefEventsFix.dll | Select-Object FullName, Length
 
