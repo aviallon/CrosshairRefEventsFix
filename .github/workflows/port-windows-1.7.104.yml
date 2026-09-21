@@ -59,8 +59,19 @@ jobs:
       - name: Build CrosshairRefEventsFix.dll
         shell: pwsh
         run: |
-          xmake f -p windows -a x64 -m release -y
-          xmake build CrosshairRefEventsFix
+          # The xmake-mirror sometimes answers 504 while fetching a prebuilt
+          # package (directxtk); retry the configure step instead of failing.
+          $ok = $false
+          for ($i = 1; $i -le 5; $i++) {
+            xmake f -p windows -a x64 -m release -y
+            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+            Write-Host "::warning::xmake configure attempt $i failed; retrying in 20s"
+            Start-Sleep -Seconds 20
+          }
+          if (-not $ok) { Write-Host "::error::xmake configure failed after 5 attempts"; exit 1 }
+
+          xmake -y build CrosshairRefEventsFix
+          if ($LASTEXITCODE -ne 0) { exit 1 }
           Get-ChildItem -Recurse -Filter CrosshairRefEventsFix.dll | Select-Object FullName, Length
 
       - name: Package the FOMOD
